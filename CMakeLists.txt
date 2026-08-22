@@ -60,6 +60,9 @@ function(rayrender_configure_app name)
             "-framework CoreFoundation"
             "-framework CoreVideo"
         )
+    elseif(UNIX AND NOT APPLE AND NOT RAYRENDER_GPU)
+        # raylib 6.0 RGFW: XRR* refs; stock referee also needs -lm.
+        target_link_libraries(${name} PRIVATE Xrandr m)
     endif()
     if(MSVC)
         target_compile_options(${name} PRIVATE /W4)

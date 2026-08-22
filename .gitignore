@@ -11,3 +11,4 @@ compile_commands.json
 *.user
 # Separate GitHub project — prefer FetchContent; keep a local checkout for LOCAL=ON
 /rlsw-cc/
+build-verify-fc/

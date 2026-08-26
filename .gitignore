@@ -4,6 +4,7 @@ bin/
 .cc-build/
 .cache/
 cmake-build-*/
+--help/
 .DS_Store
 compile_commands.json
 .idea/

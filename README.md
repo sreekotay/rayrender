@@ -48,7 +48,23 @@ Release is the default. SIMD in `rlsw` is on unless you pass `-DRAYRENDER_SIMD=O
 
 ## Performance
 
-See [rlsw-cc](https://github.com/sreekotay/rlsw-cc#performance-vs-stock-rlsw-15) for vs-stock tables (maze, hstripe parallel). Roughly **~1.6–1.9×** point / **~2.0–2.4×** bilinear on Retina-class frames vs stock rlsw 1.5.
+Apple Silicon (this machine), maze, quality 2, adaptive on, **hstripe** parallel fill, 12 frames via `./tools/parity.sh`. Window size → Retina draw FB in parentheses.
+
+| Mode | Window (draw FB) | Filter | stock ms | cc ms | vs stock |
+| --- | --- | --- | ---: | ---: | ---: |
+| bench | 1280×720 (2560×1440) | point | 328 | 167 | **1.96×** |
+| bench | 1280×720 (2560×1440) | bilinear | 448 | 182 | **2.46×** |
+| retina | 2560×1440 (5120×2880) | point | 1188 | 564 | **2.11×** |
+| retina | 2560×1440 (5120×2880) | bilinear | 1677 | 610 | **2.75×** |
+
+```bash
+RAYRENDER_FRAMES=12 ./tools/parity.sh --bench
+RAYRENDER_FRAMES=12 RAYRENDER_FILTER=bilinear ./tools/parity.sh --bench
+RAYRENDER_FRAMES=12 ./tools/parity.sh --retina
+RAYRENDER_FRAMES=12 RAYRENDER_FILTER=bilinear ./tools/parity.sh --retina
+```
+
+Checksums DIFF vs stock after bary-plane work; cc bench point stays `0x2e13ab57d738130a`. More detail: [rlsw-cc performance](https://github.com/sreekotay/rlsw-cc#performance-vs-stock-rlsw-15).
 
 ## Controls
 

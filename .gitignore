@@ -1,4 +1,5 @@
 build/
+build-profile/
 out/
 bin/
 .cc-build/

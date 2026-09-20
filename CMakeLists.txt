@@ -58,6 +58,7 @@ function(rayrender_configure_app name)
             "-framework IOKit"
             "-framework Cocoa"
             "-framework CoreFoundation"
+            "-framework CoreGraphics"
             "-framework CoreVideo"
         )
     elseif(UNIX AND NOT APPLE AND NOT RAYRENDER_GPU)
@@ -111,6 +112,9 @@ else()
     rayrender_add_rlsw_cc()
     rlsw_cc_overlay_raylib(raylib "${raylib_SOURCE_DIR}")
 
+    include(cmake/SoftPresent.cmake)
+    rayrender_apply_sw_present_overlay(raylib "${raylib_SOURCE_DIR}")
+
     if(RAYRENDER_SIMD)
         target_compile_definitions(raylib PRIVATE RLSW_USE_SIMD_INTRINSICS)
     endif()
@@ -131,6 +135,7 @@ else()
     if(NOT RAYRENDER_STOCK_RLSW)
         include(cmake/RaylibStock.cmake)
         rayrender_add_stock_raylib()
+        rayrender_sw_present_attach_stock()
 
         add_executable(rayrender-stock ${RAYRENDER_SOURCES})
         target_link_libraries(rayrender-stock PRIVATE raylib_stock)

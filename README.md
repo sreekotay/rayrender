@@ -34,7 +34,7 @@ cmake -S . -B build -DRAYRENDER_RLSW_CC_LOCAL=OFF \
   -DRAYRENDER_RLSW_CC_GIT=https://github.com/sreekotay/rlsw-cc.git
 ```
 
-Software CMake builds **both** binaries. rlsw-cc overlays its `include/rlsw.h` onto raylib's `external/rlsw.h`.
+Software CMake builds **both** binaries. `rlsw_cc_overlay_raylib` overlays `rlsw.h` and (by default) applies **soft present** — the RGFW swap / macOS CGImage staging path now ships inside [rlsw-cc](https://github.com/sreekotay/rlsw-cc) (`RLSW_CC_SOFT_PRESENT`).
 
 GPU comparison build:
 

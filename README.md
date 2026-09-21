@@ -85,4 +85,8 @@ Checksums DIFF vs stock after bary-plane work; cc bench point stays `0x2e13ab57d
 
 Maze uses first-person WASD + mouse. Viewer orbits. Stress auto-orbits.
 
-Default quality 2 is roughly a 65×65 maze, a 176² heightmap plus a dense knot, and a 16³ cube grid. That is meant to push fill rate and polycount, not to look like a 320×180 demo.
+Default quality 2 is roughly a 65×65 maze, a 249² heightmap (~2× prior terrain tris) plus a dense knot, and a 16³ cube grid. That is meant to push fill rate and polycount, not to look like a 320×180 demo.
+
+## License
+
+Dual-licensed under [MIT](LICENSE-MIT) or [BSD-2-Clause](LICENSE-BSD), at your option. Dependencies (raylib, rlsw / rlsw-cc) keep their own licenses.

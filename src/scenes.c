@@ -166,7 +166,9 @@ void Maze_Update(void)
 
 void Maze_Draw(AppState *app)
 {
-    Light_ApplyModel(gMaze.model, &app->light, gMaze.camera.position, app->light.enabled ? 2.1f : 0.0f);
+    Matrix xform = Light_DrawMatrix(gMaze.model, gMaze.mapPosition, 1.0f);
+    Light_ApplyModel(gMaze.model, xform, &app->light, gMaze.camera.position,
+                     app->light.enabled ? 2.1f : 0.0f);
 
     BeginMode3D(gMaze.camera);
     ApplyDrawMode(app);
@@ -196,7 +198,7 @@ void Maze_Shutdown(void)
 // Viewer
 //----------------------------------------------------------------------------------------------------------------------
 
-static const int kHeightSizes[] = { 80, 128, 176 };
+static const int kHeightSizes[] = { 80, 128, 249 }; /* q2: ~2× tris vs prior 176 */
 static const int kKnotRad[] = { 48, 72, 96 };
 static const int kKnotSides[] = { 16, 24, 32 };
 
@@ -332,13 +334,18 @@ void Viewer_Update(void)
 
 void Viewer_Draw(AppState *app)
 {
-    Light_ApplyModel(gViewer.terrain, &app->light, (Vector3){ 0 }, 0.0f);
-    Light_ApplyModel(gViewer.sculpture, &app->light, (Vector3){ 0 }, 0.0f);
+    float sculpScale = gViewer.customModel ? 1.0f : 3.2f;
+    Light_ApplyModel(gViewer.terrain,
+                     Light_DrawMatrix(gViewer.terrain, (Vector3){ -32.0f, 0.0f, -32.0f }, 1.0f),
+                     &app->light, (Vector3){ 0 }, 0.0f);
+    Light_ApplyModel(gViewer.sculpture,
+                     Light_DrawMatrix(gViewer.sculpture, (Vector3){ 0.0f, 8.5f, 0.0f }, sculpScale),
+                     &app->light, (Vector3){ 0 }, 0.0f);
 
     BeginMode3D(gViewer.camera);
     ApplyDrawMode(app);
     DrawModel(gViewer.terrain, (Vector3){ -32.0f, 0.0f, -32.0f }, 1.0f, WHITE);
-    DrawModel(gViewer.sculpture, (Vector3){ 0.0f, 8.5f, 0.0f }, gViewer.customModel ? 1.0f : 3.2f, WHITE);
+    DrawModel(gViewer.sculpture, (Vector3){ 0.0f, 8.5f, 0.0f }, sculpScale, WHITE);
     rlDisableWireMode();
     Light_DrawSun(&app->light, (Vector3){ 0.0f, 8.0f, 0.0f }, 28.0f);
     DrawGrid(20, 4.0f);
@@ -461,20 +468,28 @@ void Stress_Update(void)
 
 void Stress_Draw(AppState *app)
 {
-    double time = GetTime();
-    float scale = (2.0f + (float)sin(time)) * 0.7f;
+    /* Hitch-clamped clock so ApplyModel spikes don't yank the wave phase. */
+    static double waveClock = 0.0;
+    float dt = GetFrameTime();
+    if (dt < 0.0f) dt = 0.0f;
+    if (dt > (1.0f / 30.0f)) dt = 1.0f / 30.0f;
+    waveClock += (double)dt;
+
     int n = gStress.blocks;
     int cubes = 0;
+    const float spacing = 3.0f;
 
     BeginMode3D(gStress.camera);
     ApplyDrawMode(app);
 
-    Light_ApplyModel(gStress.center, &app->light, (Vector3){ 0 }, 0.0f);
+    Light_ApplyModel(gStress.center,
+                     Light_DrawMatrix(gStress.center, (Vector3){ 0.0f, 0.0f, 0.0f }, 6.0f),
+                     &app->light, (Vector3){ 0 }, 0.0f);
     DrawModel(gStress.center, (Vector3){ 0.0f, 0.0f, 0.0f }, 6.0f, WHITE);
 
-    /* Three depths: near / mid / far — same dense mesh, small screen tris farther out. */
-    Light_ApplyModel(gStress.sphere, &app->light, (Vector3){ 0 }, 0.0f);
-    float spin = (float)(time * 0.35);
+    /* Shared mesh drawn at three poses — bake object-space (can't store 3 orientations). */
+    Light_ApplyModel(gStress.sphere, MatrixIdentity(), &app->light, (Vector3){ 0 }, 0.0f);
+    float spin = (float)(waveClock * 0.35);
     DrawModelEx(gStress.sphere, (Vector3){ 14.0f, 4.0f, 0.0f }, (Vector3){ 0, 1, 0 }, spin * RAD2DEG,
                 (Vector3){ 5.5f, 5.5f, 5.5f }, WHITE);
     DrawModelEx(gStress.sphere, (Vector3){ -10.0f, 8.0f, 12.0f }, (Vector3){ 0, 1, 0 }, -spin * RAD2DEG * 0.7f,
@@ -490,13 +505,14 @@ void Stress_Draw(AppState *app)
             for (int z = 0; z < n; z++)
             {
                 float blockScale = (x + y + z) / 30.0f;
-                float scatter = sinf(blockScale * 20.0f + (float)(time * 4.0f));
+                /* Same spatial wave as before; phase from hitch-clamped clock. */
+                float scatter = sinf(blockScale * 20.0f + (float)(waveClock * 4.0));
                 Vector3 pos = {
-                    (x - n / 2.0f) * (scale * 3.0f) + scatter,
-                    (y - n / 2.0f) * (scale * 2.0f) + scatter,
-                    (z - n / 2.0f) * (scale * 3.0f) + scatter
+                    (x - n / 2.0f) * spacing + scatter,
+                    (y - n / 2.0f) * spacing * 0.75f + scatter,
+                    (z - n / 2.0f) * spacing + scatter
                 };
-                float size = (2.4f - scale) * blockScale;
+                float size = 1.1f;
                 Vector3 nrm = Vector3LengthSqr(pos) > 0.0001f ? Vector3Normalize(pos) : (Vector3){ 0.0f, 1.0f, 0.0f };
                 Color lit = Light_Tint(gStress.cubeColors[idx], nrm, pos, &app->light, (Vector3){ 0 }, 0.0f);
                 if (app->wireframe) DrawCubeWires(pos, size, size, size, lit);

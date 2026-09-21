@@ -518,7 +518,11 @@ int main(void)
         if (IsKeyPressed(KEY_L)) app.wireframe = !app.wireframe;
         if (IsKeyPressed(KEY_C)) app.cull = !app.cull;
         if (IsKeyPressed(KEY_H)) app.showHud = !app.showHud;
-        if (IsKeyPressed(KEY_I)) app.light.enabled = !app.light.enabled;
+        if (IsKeyPressed(KEY_I))
+        {
+            app.light.enabled = !app.light.enabled;
+            app.light.revision++;
+        }
         if (IsKeyPressed(KEY_O)) app.light.orbit = !app.light.orbit;
 #if defined(RAYRENDER_IMPL_CC) && !defined(RAYRENDER_GPU)
         if (IsKeyPressed(KEY_A))
@@ -537,9 +541,21 @@ int main(void)
         Light_Update(&app.light);
         UpdateScene(app.scene);
 
-        snprintf(title, sizeof(title), "rayrender [%s]  |  %s  |  %s  |  %d fps",
-                 ImplName(), BackendName(), SceneName(app.scene), GetFPS());
-        SetWindowTitle(title);
+        /* setName every frame forces AppKit layout and stutters presents on macOS. */
+        {
+            static char prevTitle[160];
+            static double lastTitleTime = 0.0;
+            double now = GetTime();
+            snprintf(title, sizeof(title), "rayrender [%s]  |  %s  |  %s  |  %d fps",
+                     ImplName(), BackendName(), SceneName(app.scene), GetFPS());
+            if ((now - lastTitleTime) > 0.25 || strcmp(title, prevTitle) != 0)
+            {
+                SetWindowTitle(title);
+                strncpy(prevTitle, title, sizeof(prevTitle) - 1);
+                prevTitle[sizeof(prevTitle) - 1] = '\0';
+                lastTitleTime = now;
+            }
+        }
 
         DrawFrame(&app, &target, true);
     }

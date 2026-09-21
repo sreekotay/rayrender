@@ -41,8 +41,8 @@ function(rayrender_apply_sw_present_overlay raylib_target raylib_src_dir)
 
     if(APPLE)
         target_sources(${raylib_target} PRIVATE "${_present_c}")
-        target_compile_definitions(${raylib_target} PRIVATE SW_FRAMEBUFFER_OUTPUT_BGRA=0)
-        target_link_libraries(${raylib_target} PRIVATE "-framework CoreGraphics")
+        # BGRA premul matches CA native layout (see macos_sw_present.c); default rlsw BGRA out.
+        target_link_libraries(${raylib_target} PRIVATE "-framework CoreGraphics" "-framework CoreFoundation")
         set_source_files_properties("${raylib_src_dir}/src/rcore.c" PROPERTIES
             OBJECT_DEPENDS "${_platform_c};${_rgfw_h};${_present_c};${_stamp}"
         )
@@ -56,8 +56,7 @@ function(rayrender_sw_present_attach_stock)
     if(APPLE)
         set(_present_c "${CMAKE_SOURCE_DIR}/cmake/overlays/macos_sw_present.c")
         target_sources(raylib_stock PRIVATE "${_present_c}")
-        target_compile_definitions(raylib_stock PRIVATE SW_FRAMEBUFFER_OUTPUT_BGRA=0)
-        target_link_libraries(raylib_stock PRIVATE "-framework CoreGraphics")
+        target_link_libraries(raylib_stock PRIVATE "-framework CoreGraphics" "-framework CoreFoundation")
     endif()
     if(TARGET rayrender_sw_present_overlay)
         add_dependencies(raylib_stock rayrender_sw_present_overlay)

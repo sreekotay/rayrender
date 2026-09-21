@@ -48,7 +48,41 @@ OLD_SWAP_MACOS = r"""            // copy rlsw pixel data to the surface framebuf
                 RGFW_window_blitSurface(platform.window, platform.surface);
             #endif"""
 
-NEW_SWAP = r"""            /* RAYRENDER_FAST_PRESENT: platform-aligned readback + fast blit */
+NEW_SWAP = r"""            /* RAYRENDER_FAST_PRESENT: macOS zero-copy FB; else BGRA readback + blit */
+            #if defined(__APPLE__)
+                /* Present GL bottom-up RGBA via CGImage + layer Y-flip (no ReadPixels copy). */
+                {
+                    int cw = 0, ch = 0;
+                    void *fb = swGetColorBuffer(&cw, &ch);
+                    if (fb != NULL)
+                    {
+                        extern void RayrenderMacOSPresent(void *nsview, void *pixels, int width, int height);
+                        RayrenderMacOSPresent(RGFW_window_getView_OSX(platform.window), fb, cw, ch);
+                    }
+                }
+            #else
+                swReadPixels(0, 0, platform.surfaceWidth, platform.surfaceHeight, SW_RGBA, SW_UNSIGNED_BYTE, platform.surfacePixels);
+                /* BGRA surface + SW_FRAMEBUFFER_OUTPUT_BGRA → RGFW zero-copy blit */
+                RGFW_window_blitSurface(platform.window, platform.surface);
+            #endif"""
+
+# Prior fast-present form (ReadPixels then Mac present)
+OLD_SWAP_FAST = r"""            /* RAYRENDER_FAST_PRESENT: BGRA readback + platform fast blit */
+            swReadPixels(0, 0, platform.surfaceWidth, platform.surfaceHeight, SW_RGBA, SW_UNSIGNED_BYTE, platform.surfacePixels);
+
+            #if defined(__APPLE__)
+                extern void RayrenderMacOSPresent(void *nsview, void *pixels, int width, int height);
+                RayrenderMacOSPresent(RGFW_window_getView_OSX(platform.window),
+                                      platform.surfacePixels,
+                                      platform.surfaceWidth,
+                                      platform.surfaceHeight);
+            #else
+                /* BGRA surface + SW_FRAMEBUFFER_OUTPUT_BGRA → RGFW zero-copy blit */
+                RGFW_window_blitSurface(platform.window, platform.surface);
+            #endif"""
+
+# Also match wording variant
+OLD_SWAP_FAST2 = r"""            /* RAYRENDER_FAST_PRESENT: platform-aligned readback + fast blit */
             swReadPixels(0, 0, platform.surfaceWidth, platform.surfaceHeight, SW_RGBA, SW_UNSIGNED_BYTE, platform.surfacePixels);
 
             #if defined(__APPLE__)
@@ -71,7 +105,7 @@ CREATE_RE = re.compile(
     re.M,
 )
 
-# Match a previously applied (or mangled) ifdef createSurface block.
+# Match a previously applied ifdef createSurface block (legacy Apple/else).
 CREATE_IF_RE = re.compile(
     r"[ \t]*#if defined\(__APPLE__\) /\* RAYRENDER_FAST_PRESENT \*/\n"
     r"(?:[ \t]*#if defined\(__APPLE__\) /\* RAYRENDER_FAST_PRESENT \*/\n)?"
@@ -82,6 +116,16 @@ CREATE_IF_RE = re.compile(
     r"(?:[ \t]*#else\n"
     r"[ \t]*platform\.surface = RGFW_window_createSurface\([^;]+;\n"
     r"[ \t]*#endif\n)?",
+    re.M,
+)
+
+# Match comment + BGRA createSurface (current form).
+CREATE_FAST_RE = re.compile(
+    r"[ \t]*/\* RAYRENDER_FAST_PRESENT \*/\n"
+    r"[ \t]*platform\.surface = RGFW_window_createSurface\("
+    r"platform\.window, platform\.surfacePixels, "
+    r"platform\.surfaceWidth, platform\.surfaceHeight, "
+    r"RGFW_formatBGRA8\);[ \t]*\n?",
     re.M,
 )
 
@@ -172,30 +216,29 @@ WIN_BLIT_NEW = r"""void RGFW_window_blitSurface(RGFW_window* win, RGFW_surface* 
 
 
 def surface_block(indent: str) -> str:
+    # BGRA everywhere: matches SW_FRAMEBUFFER_OUTPUT_BGRA and CA/X11/Win native.
     return (
-        f"{indent}#if defined(__APPLE__) /* RAYRENDER_FAST_PRESENT */\n"
-        f"{indent}platform.surface = RGFW_window_createSurface(platform.window, platform.surfacePixels, "
-        f"platform.surfaceWidth, platform.surfaceHeight, RGFW_formatRGBA8);\n"
-        f"{indent}#else\n"
+        f"{indent}/* RAYRENDER_FAST_PRESENT */\n"
         f"{indent}platform.surface = RGFW_window_createSurface(platform.window, platform.surfacePixels, "
         f"platform.surfaceWidth, platform.surfaceHeight, RGFW_formatBGRA8);\n"
-        f"{indent}#endif\n"
     )
 
 
 def patch_surfaces(text: str) -> tuple[str, int]:
-    """Replace createSurface assignments (or repair mangled ifdefs) with clean ifdef blocks."""
-    # First collapse any mangled/existing ifdef blocks back to a single placeholder line,
-    # then rewrite all createSurface lines.
-    def collapse(m: re.Match[str]) -> str:
-        # Preserve indent of the first #if line's content level → use 24 spaces for resize, 8 for init
-        line = m.group(0)
-        indent_m = re.search(r"^( +)platform\.surface =", line, re.M)
+    """Replace createSurface assignments (or repair mangled ifdefs) with BGRA fast-present lines."""
+
+    def collapse_if(m: re.Match[str]) -> str:
+        indent_m = re.search(r"^( +)platform\.surface =", m.group(0), re.M)
         indent = indent_m.group(1) if indent_m else "        "
-        # Prefer deepest common indent from original surrounding — use indent of platform.surface line
         return f"{indent}platform.surface = RGFW_window_createSurface(platform.window, platform.surfacePixels, platform.surfaceWidth, platform.surfaceHeight, RGFW_formatBGRA8);\n"
 
-    text2 = CREATE_IF_RE.sub(collapse, text)
+    def collapse_fast(m: re.Match[str]) -> str:
+        indent_m = re.search(r"^( +)platform\.surface =", m.group(0), re.M)
+        indent = indent_m.group(1) if indent_m else "        "
+        return f"{indent}platform.surface = RGFW_window_createSurface(platform.window, platform.surfacePixels, platform.surfaceWidth, platform.surfaceHeight, RGFW_formatBGRA8);\n"
+
+    text2 = CREATE_IF_RE.sub(collapse_if, text)
+    text2 = CREATE_FAST_RE.sub(collapse_fast, text2)
     count = 0
 
     def repl(m: re.Match[str]) -> str:
@@ -212,34 +255,31 @@ def patch_rcore(path: pathlib.Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     notes: list[str] = []
 
-    if MARKER in text and "RayrenderMacOSPresent" in text and OLD_SWAP_STOCK not in text and OLD_SWAP_MACOS not in text:
+    if "swGetColorBuffer" in text and "RAYRENDER_FAST_PRESENT: macOS zero-copy" in text:
         notes.append("swap ok")
     else:
-        for label, old in (("stock-swap", OLD_SWAP_STOCK), ("macos-swap", OLD_SWAP_MACOS)):
+        for label, old in (
+            ("stock-swap", OLD_SWAP_STOCK),
+            ("macos-swap", OLD_SWAP_MACOS),
+            ("fast-swap", OLD_SWAP_FAST),
+            ("fast-swap2", OLD_SWAP_FAST2),
+        ):
             if old in text:
                 text = text.replace(old, NEW_SWAP, 1)
                 notes.append(f"swap from {label}")
                 break
         else:
-            if "RAYRENDER_FAST_PRESENT: platform-aligned" not in text:
+            if "RAYRENDER_FAST_PRESENT" not in text or "RayrenderMacOSPresent" not in text:
                 raise SystemExit(f"error: SwapScreenBuffer block not found in {path}")
             notes.append("swap ok")
 
     text, n_surf = patch_surfaces(text)
     notes.append(f"surface x{n_surf}")
-    if n_surf < 2:
-        # Already clean ifdef blocks: count them
-        n_if = text.count("/* RAYRENDER_FAST_PRESENT */\n")
-        # rough: two create sites each add one marker on #if line
-        create_markers = len(re.findall(
-            r"#if defined\(__APPLE__\) /\* RAYRENDER_FAST_PRESENT \*/\n"
-            r"[ \t]*platform\.surface = RGFW_window_createSurface",
-            text,
-        ))
-        if create_markers >= 2:
-            notes.append(f"surface ifdef ok ({create_markers})")
-        else:
-            raise SystemExit(f"error: surface create sites: got {n_surf} rewrites, {create_markers} ifdefs in {path}")
+    create_markers = text.count("/* RAYRENDER_FAST_PRESENT */\n")
+    if n_surf < 2 and create_markers < 2:
+        raise SystemExit(f"error: surface create sites: got {n_surf} rewrites, {create_markers} markers in {path}")
+    if create_markers >= 2:
+        notes.append(f"surface markers ok ({create_markers})")
 
     path.write_text(text, encoding="utf-8")
     return notes

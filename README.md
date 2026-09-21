@@ -48,20 +48,20 @@ Release is the default. SIMD in `rlsw` is on unless you pass `-DRAYRENDER_SIMD=O
 
 ## Performance
 
-Apple Silicon (this machine), maze, quality 2, adaptive on, **hstripe** parallel fill, 12 frames via `./tools/parity.sh`. Window size → Retina draw FB in parentheses.
+Apple Silicon (this machine), maze, quality 2, adaptive on, **hstripe** parallel fill. Means of 3×60-frame runs via `./tools/parity.sh` (12-frame runs are too noisy). Window size → Retina draw FB in parentheses.
 
 | Mode | Window (draw FB) | Filter | stock ms | cc ms | vs stock |
 | --- | --- | --- | ---: | ---: | ---: |
-| bench | 1280×720 (2560×1440) | point | 328 | 167 | **1.96×** |
-| bench | 1280×720 (2560×1440) | bilinear | 448 | 182 | **2.46×** |
-| retina | 2560×1440 (5120×2880) | point | 1188 | 564 | **2.11×** |
-| retina | 2560×1440 (5120×2880) | bilinear | 1677 | 610 | **2.75×** |
+| bench | 1280×720 (2560×1440) | point | 1138 | 330 | **3.45×** |
+| bench | 1280×720 (2560×1440) | bilinear | 1754 | 379 | **4.63×** |
+| retina | 2560×1440 (5120×2880) | point | 4128 | 949 | **4.35×** |
+| retina | 2560×1440 (5120×2880) | bilinear | 6587 | 1195 | **5.51×** |
 
 ```bash
-RAYRENDER_FRAMES=12 ./tools/parity.sh --bench
-RAYRENDER_FRAMES=12 RAYRENDER_FILTER=bilinear ./tools/parity.sh --bench
-RAYRENDER_FRAMES=12 ./tools/parity.sh --retina
-RAYRENDER_FRAMES=12 RAYRENDER_FILTER=bilinear ./tools/parity.sh --retina
+RAYRENDER_FRAMES=60 ./tools/parity.sh --bench
+RAYRENDER_FRAMES=60 RAYRENDER_FILTER=bilinear ./tools/parity.sh --bench
+RAYRENDER_FRAMES=60 ./tools/parity.sh --retina
+RAYRENDER_FRAMES=60 RAYRENDER_FILTER=bilinear ./tools/parity.sh --retina
 ```
 
 Checksums DIFF vs stock after bary-plane work; cc bench point stays `0x2e13ab57d738130a`. More detail: [rlsw-cc performance](https://github.com/sreekotay/rlsw-cc#performance-vs-stock-rlsw-15).
